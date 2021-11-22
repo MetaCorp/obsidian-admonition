@@ -238,6 +238,7 @@ export abstract class SuggestionModal<T> extends FuzzySuggestModal<T> {
             prompt.appendChild(p);
         }
     }
+
     abstract onChooseItem(item: T, evt: MouseEvent | KeyboardEvent): void;
     abstract getItemText(arg: T): string;
     abstract getItems(): T[];
@@ -334,6 +335,8 @@ class AdmonitionSuggestionModal extends SuggestionModal<Admonition> {
         this.createPrompts();
 
         this.inputEl.addEventListener("input", this.getItem.bind(this));
+
+        console.log('Yo From AdSuggMod')
     }
     createPrompts() {}
     getItem() {
@@ -348,13 +351,15 @@ class AdmonitionSuggestionModal extends SuggestionModal<Admonition> {
     getItemText(item: Admonition) {
         return item.type;
     }
-    onChooseItem(item: Admonition) {
+    onChooseItem(item: Admonition, evt: any) {
         this.text.setValue(item.type);
         this.admonition = item;
     }
-    selectSuggestion({ item }: FuzzyMatch<Admonition>) {
+    selectSuggestion({ item }: FuzzyMatch<Admonition>, evt: any) {
+        const quickAdd = evt.key === "Enter"
+        // console.log("selectSuggestion AdSuggModal :", { item, evt, quickAdd })
         this.text.setValue(item.type);
-        this.onClose();
+        this.onClose(null, null, quickAdd);
         this.close();
     }
     renderSuggestion(result: FuzzyMatch<Admonition>, el: HTMLElement) {
@@ -421,8 +426,47 @@ export class InsertAdmonitionModal extends Modal {
 
         contentEl.empty();
 
+
+        const insertAd = () => {
+            try {
+                let titleLine = "",
+                    collapseLine = "";
+                if (
+                    this.title.length &&
+                    this.title.toLowerCase() !=
+                    this.type.toLowerCase()
+                ) {
+                    titleLine = `title: ${this.title}\n`;
+                }
+                if (
+                    (this.plugin.data.autoCollapse &&
+                        this.collapse !=
+                        this.plugin.data.defaultCollapseType) ||
+                    (!this.plugin.data.autoCollapse &&
+                        this.collapse != "none")
+                ) {
+                    collapseLine = `collapse: ${this.collapse}\n`;
+                }
+                this.editor.getDoc().replaceSelection(
+                    `\`\`\`ad-${this.type
+                    }\n${titleLine}${collapseLine}
+${this.editor.getDoc().getSelection()}
+
+\`\`\`\n`
+                );
+                const cursor = this.editor.getCursor();
+                this.editor.setCursor(cursor.line - 3);
+            } catch (e) {
+                new Notice(
+                    "There was an issue inserting the admonition."
+                );
+            }
+            this.close();
+        }
+
         const typeSetting = new Setting(contentEl);
         typeSetting.setName("Admonition Type").addText((t) => {
+
             t.setPlaceholder("Admonition Type").setValue(this.type);
             const modal = new AdmonitionSuggestionModal(
                 this.app,
@@ -430,7 +474,8 @@ export class InsertAdmonitionModal extends Modal {
                 this.plugin.admonitionArray
             );
 
-            const build = () => {
+            const build = (_?: any, __?: any, quickAdd: boolean = false) => {
+                console.log('build :', { quickAdd })
                 if (
                     t.inputEl.value &&
                     this.plugin.admonitions[t.inputEl.value]
@@ -448,6 +493,10 @@ export class InsertAdmonitionModal extends Modal {
                 }
 
                 this.buildAdmonition();
+
+                if (quickAdd) {
+                    insertAd()
+                }
             };
 
             t.inputEl.onblur = build;
@@ -513,48 +562,13 @@ export class InsertAdmonitionModal extends Modal {
         this.admonitionEl = this.contentEl.createDiv();
         this.buildAdmonition();
 
+
         new Setting(contentEl)
             .addButton((b) =>
                 b
                     .setButtonText("Insert")
                     .setCta()
-                    .onClick(() => {
-                        try {
-                            let titleLine = "",
-                                collapseLine = "";
-                            if (
-                                this.title.length &&
-                                this.title.toLowerCase() !=
-                                    this.type.toLowerCase()
-                            ) {
-                                titleLine = `title: ${this.title}\n`;
-                            }
-                            if (
-                                (this.plugin.data.autoCollapse &&
-                                    this.collapse !=
-                                        this.plugin.data.defaultCollapseType) ||
-                                (!this.plugin.data.autoCollapse &&
-                                    this.collapse != "none")
-                            ) {
-                                collapseLine = `collapse: ${this.collapse}\n`;
-                            }
-                            this.editor.getDoc().replaceSelection(
-                                `\`\`\`ad-${
-                                    this.type
-                                }\n${titleLine}${collapseLine}
-${this.editor.getDoc().getSelection()}
-
-\`\`\`\n`
-                            );
-                            const cursor = this.editor.getCursor();
-                            this.editor.setCursor(cursor.line - 3);
-                        } catch (e) {
-                            new Notice(
-                                "There was an issue inserting the admonition."
-                            );
-                        }
-                        this.close();
-                    })
+                    .onClick(insertAd)
             )
             .addExtraButton((b) => {
                 b.setIcon("cross")
