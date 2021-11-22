@@ -89,6 +89,8 @@ export function getParametersFromSource(
         ++skipLines;
     }
 
+    if (!params.title) params.title = ""
+
     let { title = admonitionTitle, collapse, icon, color } = params;
 
     let content = lines.slice(skipLines).join("\n");
